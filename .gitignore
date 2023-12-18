@@ -1,0 +1,8 @@
+.idea/
+.venv/
+.pdm-python
+conf/
+dist/
+**/__pycache__/
+build/
+*.spec

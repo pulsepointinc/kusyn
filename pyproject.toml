@@ -1,0 +1,77 @@
+[project]
+name = "kusyn"
+description = "an util tool for synchronization your local dev env to a kube pod"
+authors = [
+    {name = "Ivan Zemlianskii", email = "izemlyanskiy@pulsepoint.com"},
+]
+requires-python = ">=3.9"
+dynamic = ["version"]
+license = {text = "proprietary"}
+dependencies=[
+    "kubernetes",
+    "watchdog",
+    "pyhocon"
+]
+
+[project.scripts]
+kusyn = "kusyn:main"
+
+[options.entry_points]
+console_scripts = {kusyn= "kusyn:main"}
+
+[project.urls]
+homepage = "https://github.com/pulsepointinc/kusyn"
+
+
+[build-system]
+requires = ["pdm-pep517"]
+build-backend = "pdm.pep517.api"
+
+[tool]
+[tool.pdm]
+version = { source = "file", path = "__version__.py" }
+write_to = "__version__.py"
+write_template = "__version__ = '{}'"
+package-dir = "src"
+
+[tool.pdm.build]
+package-dir = "src"
+includes = ["src/kusyn/"]
+
+
+[[tool.pdm.source]]
+url = "https://pypi.org/simple/"
+verify_ssl = true
+name = "public-pypi"
+
+[tool.pdm.resolution]
+respect-source-order = true
+
+[tool.pdm.scripts]
+_.env = {PYTHONPYCACHEPREFIX="/tmp/pycache"}
+test = "pytest"
+lint = "flake8 src tests"
+format = "python -m black src tests"
+format-check = "python -m black src tests --diff --check"
+kusyn = {call = "kusyn.kusyn:main"}
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "flake8",
+    "black",
+    "pytz",
+    "pytest~=6.2",
+    "pytest-cov~=3.0",
+    "pytest-mock~=3.6",
+    "pyinstaller>=6.3.0; python_version < \"3.13\"",
+    "twine>=4.0.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+
+[tool.black]
+line-length = 120
+target-version = ['py39']
+include = '\.pyi?$'
