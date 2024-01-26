@@ -320,15 +320,14 @@ def main():
     dockerfile = config.dockerfile
     project_root = dockerfile.parent
 
-    print(f"Try to find your pod {config.pod_name} with a command like")
+    print(f"Trying to find your pod {config.pod_name} with a command like...")
     print(f"$ kubectl"
-          f" --context {config.context if config.context else ''}"
-          f" -n {config.namespace if config.namespace else ''}"
+          f" {'--context ' + config.context if config.context else ''}"
+          f" {'-n ' + config.namespace if config.namespace else ''}"
           " get pods\n")
     pod_k8s_configuration_yaml = config.pod_configuration_yaml
     find_or_create_pod(api_client, api_core, config, pod_k8s_configuration_yaml)
 
-    # todo maybe we need src => dest mapping in a config
     src_dest_dict = find_all_sources(dockerfile)
     directories_to_watch = [str(project_root.absolute().joinpath(src)) for src in src_dest_dict.keys()]
     if not config.skip_first_sync:
@@ -339,7 +338,13 @@ def main():
     else:
         print("Skip the first synchronize with the pod")
 
-    print("\n\nNow start watching your files for changes...")
+    print("\n\nYou can connect to your pod with this command:")
+    print(f"$ kubectl"
+          f" {'--context ' + config.context if config.context else ''}"
+          f" {'-n ' + config.namespace if config.namespace else ''}"
+          f" exec -it {config.pod_name} -- /bin/bash")
+
+    print("\n\nNow we start watching your files for the changes...")
     files_queue = queue.Queue()
     event_handler = FileSyncHandler(files_queue)
 
