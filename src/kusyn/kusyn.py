@@ -181,6 +181,9 @@ def create_transport_tar(src_dest: dict[pathlib.Path, pathlib.Path]) -> io.Bytes
             else:
                 print(f"skip file (doesn't exist) {source}")
     result_tar.seek(0)
+    with open("/tmp/test.tar", 'wb') as file:
+        file.write(result_tar.getvalue())
+    result_tar.seek(0)
     return result_tar
 
 
@@ -304,8 +307,8 @@ def drain_watchdog_event_queue(
     print("\nfound changes in files:")
     for f in send_files:
         print(f"  {f}")
-    send_files_action(convert_absolute_path_to_src_dest(project_root, src_dest, send_files))
     remove_files_action(convert_absolute_path_to_src_dest(project_root, src_dest, remove_files))
+    send_files_action(convert_absolute_path_to_src_dest(project_root, src_dest, send_files))
     files_queue.task_done()
 
 
