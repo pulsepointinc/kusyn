@@ -181,9 +181,6 @@ def create_transport_tar(src_dest: dict[pathlib.Path, pathlib.Path]) -> io.Bytes
             else:
                 print(f"skip file (doesn't exist) {source}")
     result_tar.seek(0)
-    with open("/tmp/test.tar", 'wb') as file:
-        file.write(result_tar.getvalue())
-    result_tar.seek(0)
     return result_tar
 
 
