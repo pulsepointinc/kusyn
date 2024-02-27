@@ -64,6 +64,7 @@ def test_convert_absolute_path_to_src_dest():
         str(TEST_DATA_FOLDER / "another_test/deep"),
         str(TEST_DATA_FOLDER / "another_test/deep/some_file"),
         str(TEST_DATA_FOLDER / "another_test/with_slash/"),
+        "/some/abs/path/.hidden/file"
     ]
     src_dest = convert_absolute_path_to_src_dest(
         TEST_DATA_FOLDER,
@@ -74,8 +75,9 @@ def test_convert_absolute_path_to_src_dest():
             "another_test/deep": "/dest/deep",
             "another_test/with_slash/": "/dest_with_slash",
             "test_file42": "/dest42",
+            "/some/abs/path/.hidden/": "/abs/path/dest/"
         },
-        abs_paths=test_files,
+        changed_files_abs_paths=test_files,
     )
     assert src_dest == {
         TEST_DATA_FOLDER / "test_file_to_file": pathlib.Path("/dest1/some_file"),
@@ -85,6 +87,7 @@ def test_convert_absolute_path_to_src_dest():
         TEST_DATA_FOLDER / "another_test/deep": pathlib.Path("/dest/deep"),
         TEST_DATA_FOLDER / "another_test/deep/some_file": pathlib.Path("/dest/deep/some_file"),
         TEST_DATA_FOLDER / "another_test/with_slash/": pathlib.Path("/dest_with_slash"),
+        pathlib.Path("/some/abs/path/.hidden/file"): pathlib.Path("/abs/path/dest/file"),
     }
 
 
@@ -147,7 +150,7 @@ def test_kusyn_config():
     assert config.pod_configuration_yaml == TEST_DATA_FOLDER / 'test_file_to_file'
     assert config.src_dest == {
         'single_source': '/dest',
-        'test/': '/test/',
+        'test/.hidden/': '/test/',
         'another_file': '/another/dest',
     }
 

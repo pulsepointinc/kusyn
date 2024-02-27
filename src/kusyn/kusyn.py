@@ -23,6 +23,7 @@ def parse_cli_args(cli_args):
     parser.add_argument("--context", help="specify your kubernetes context")
     parser.add_argument("--namespace", "-n", default="default", help="kubernetes namespace")
     parser.add_argument("--skip-first-sync", "-s", action="store_true", help="skip initial synchronize")
+    parser.add_argument("--pod-exists", "-pe", action="store_true", help="skip initial dev pod lookup")
     args, _ = parser.parse_known_args(cli_args)
     return args
 
@@ -58,7 +59,9 @@ class KusynConfig:
             raise Exception("Please specify configuration yaml for your development pod (pod_configuration_yaml)")
         syn = kusyn_config.syn.copy()
         syn.pop('dockerfile', None)
-        self._src_dest = dict(syn)
+        self._src_dest = {}
+        for k, v in dict(syn).items():
+            self._src_dest[k.strip('"\'')] = v.strip('"\'')
         self._project_root = parsed_file.parent
         self._pod_configuration_yaml = parsed_file.parent.joinpath(kusyn_config.ku.pod_configuration_yaml)
         if not self._pod_configuration_yaml.exists():
@@ -98,6 +101,10 @@ class KusynConfig:
     @property
     def skip_first_sync(self):
         return self._config.ku.skip_first_sync
+
+    @property
+    def pod_exists(self) -> bool:
+        return self._config.ku.pod_exists
 
     @property
     def pod_name(self):
@@ -202,7 +209,7 @@ def send_tar_to_pod(kube_conn: client.CoreV1Api, namespace: str, pod_name: str, 
     )
 
     while resp.is_open():
-        resp.update(timeout=1)
+        resp.update()
         if commands:
             c = commands.pop(0)
             resp.write_stdin(c)
@@ -234,19 +241,19 @@ def remove_files_from_pod(
 def convert_absolute_path_to_src_dest(
         project_root: pathlib.Path,
         src_dest: dict[str, str],
-        abs_paths: [str]) -> dict[pathlib.Path, pathlib.Path]:
+        changed_files_abs_paths: [str]) -> dict[pathlib.Path, pathlib.Path]:
     result = {}
-    for abs_path in abs_paths:
+    for abs_path in changed_files_abs_paths:
         path = abs_path.replace(str(project_root.absolute()), "").strip("/")
         for source, dest in src_dest.items():
-            if path.startswith(source.rstrip("/")):
+            if path.startswith(source.strip("/")):
                 key = pathlib.Path(abs_path)
-                if dest.endswith("/"):
+                if dest.endswith("/") and not source.startswith("/"):
                     result[key] = pathlib.Path(dest).joinpath(source)
                 else:
                     # for cases like in Dockerfile 'COPY src/ app'
                     # and we caught a modification event for a file /abs/path/src/hello/kitty.py
-                    sub_path = path[len(source):]
+                    sub_path = path[len(source.lstrip("/")):]
                     sub_path = sub_path if not sub_path.startswith("/") else sub_path[1:]
                     result[key] = pathlib.Path(dest).joinpath(sub_path)
                 break
@@ -326,13 +333,13 @@ def main():
           f" {'-n ' + config.namespace if config.namespace else ''}"
           " get pods\n")
     pod_k8s_configuration_yaml = config.pod_configuration_yaml
-    find_or_create_pod(api_client, api_core, config, pod_k8s_configuration_yaml)
+    if not config.pod_exists:
+        find_or_create_pod(api_client, api_core, config, pod_k8s_configuration_yaml)
 
-    src_dest_dict = find_all_sources(dockerfile)
-    directories_to_watch = [str(project_root.absolute().joinpath(src)) for src in src_dest_dict.keys()]
+    directories_to_watch = [str(project_root.absolute().joinpath(src)) for src in config.src_dest.keys()]
     if not config.skip_first_sync:
         print("Perform initial synchronize with the pod (you can disable it with the '--skip_first_sync' flag)")
-        transfer_files = convert_absolute_path_to_src_dest(project_root, src_dest_dict, directories_to_watch)
+        transfer_files = convert_absolute_path_to_src_dest(project_root, config.src_dest, directories_to_watch)
         send_tar_to_pod(api_core, config.namespace, config.pod_name, create_transport_tar(transfer_files))
         print("done!")
     else:
@@ -359,7 +366,7 @@ def main():
             drain_watchdog_event_queue(
                 files_queue,
                 project_root,
-                src_dest_dict,
+                config.src_dest,
                 lambda d: send_tar_to_pod(api_core, config.namespace, config.pod_name, create_transport_tar(d)),
                 lambda d: remove_files_from_pod(api_core, config.namespace, config.pod_name, d),
             )
