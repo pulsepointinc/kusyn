@@ -120,7 +120,8 @@ class KusynConfig:
 
 
 def find_pod(kube_conn, namespace: str, pod_name: str):
-    pods = kube_conn.list_namespaced_pod(namespace=namespace, watch=False)
+    pods = kube_conn.list_namespaced_pod(namespace=namespace, field_selector='metadata.name=' + pod_name)
+
     for pod in pods.items:
         if pod.metadata.name == pod_name:
             return pod
