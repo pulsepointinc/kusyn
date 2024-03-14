@@ -189,11 +189,17 @@ def create_transport_tar(src_dest: dict[pathlib.Path, pathlib.Path]) -> io.Bytes
             else:
                 print(f"skip file (doesn't exist) {source}")
     result_tar.seek(0)
+    # todo maybe we may have a flag to save the tar file for debug purposes
     return result_tar
 
 
-def send_tar_to_pod(kube_conn: client.CoreV1Api, namespace: str, pod_name: str, transport_tar: io.BytesIO):
-    commands = [transport_tar.getvalue()]
+def send_tar_to_pod(kube_conn: client.CoreV1Api,
+                    namespace: str,
+                    pod_name: str,
+                    transport_tar: io.BytesIO,
+                    max_chunk_size=1024 * 10):
+    byte_array = transport_tar.getvalue()
+    commands = [byte_array[i:i + max_chunk_size] for i in range(0, len(byte_array), max_chunk_size)]
 
     # Copying file
     exec_command = ["tar", "xvf", "-", "-C", "/"]
