@@ -20,6 +20,7 @@ from watchdog.observers import Observer
 def parse_cli_args(cli_args):
     parser = argparse.ArgumentParser(prog="kusyn", description="sync your local files with a kubernetes pod")
     parser.add_argument("--config-file", '-f', default='kusyn.conf', help="path to kusyn config file")
+    parser.add_argument("--kubeconfig", '-kc', default='', help="path to kubernetes config file")
     parser.add_argument("--context", help="specify your kubernetes context")
     parser.add_argument("--namespace", "-n", default="default", help="kubernetes namespace")
     parser.add_argument("--skip-first-sync", "-s", action="store_true", help="skip initial synchronize")
@@ -90,6 +91,10 @@ class KusynConfig:
     @src_dest.setter
     def src_dest(self, src_dest):
         self.src_dest = src_dest
+
+    @property
+    def kubeconfig(self):
+        return self._config.ku.kubeconfig or None
 
     @property
     def context(self):
@@ -358,7 +363,8 @@ def main():
     print(sys.argv)
     config = KusynConfig.parse_from_cli_and_conf_file(sys.argv, os.environ)
 
-    kubernetes.config.load_kube_config(context=config.context)
+    print(f'Init kubectl with --kubeconfig={config.kubeconfig} --context={config.context}')
+    kubernetes.config.load_kube_config(config_file=config.kubeconfig, context=config.context)
     api_client = client.ApiClient()
     api_core = client.CoreV1Api()
 
@@ -369,6 +375,7 @@ def main():
 
     print(f"Trying to find your pod {config.pod_name} with a command like...")
     print(f"$ kubectl"
+          f" {'--kubeconfig ' + config.kubeconfig if config.kubeconfig else ''}"
           f" {'--context ' + config.context if config.context else ''}"
           f" {'-n ' + config.namespace if config.namespace else ''}"
           " get pods\n")
@@ -386,6 +393,7 @@ def main():
 
     print("\n\nYou can connect to your pod with this command:")
     print(f"$ kubectl"
+          f" {'--kubeconfig ' + config.kubeconfig if config.kubeconfig else ''}"
           f" {'--context ' + config.context if config.context else ''}"
           f" {'-n ' + config.namespace if config.namespace else ''}"
           f" exec -it {config.pod_name} -- /bin/bash")
