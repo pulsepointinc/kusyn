@@ -24,6 +24,7 @@ def parse_cli_args(cli_args):
     parser.add_argument("--namespace", "-n", default="default", help="kubernetes namespace")
     parser.add_argument("--skip-first-sync", "-s", action="store_true", help="skip initial synchronize")
     parser.add_argument("--pod-exists", "-pe", action="store_true", help="skip initial dev pod lookup")
+    parser.add_argument("--restart", "-rm", "-rm", action="store_true", help="remove previous dev pod")
     args, _ = parser.parse_known_args(cli_args)
     return args
 
@@ -103,6 +104,10 @@ class KusynConfig:
         return self._config.ku.skip_first_sync
 
     @property
+    def restart(self):
+        return self._config.ku.restart
+
+    @property
     def pod_exists(self) -> bool:
         return self._config.ku.pod_exists
 
@@ -117,6 +122,31 @@ class KusynConfig:
     @property
     def pod_configuration_yaml(self):
         return self._pod_configuration_yaml
+
+
+def delete_pod(api_core, namespace, pod_name):
+    print(f"Removing your previous pod {pod_name}")
+    try:
+        api_core.delete_namespaced_pod(async_req=False, namespace=namespace, name=pod_name)
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.reason.lower() == 'not found':
+            print(f"Your pod {pod_name} is absent")
+            return
+        else:
+            raise e
+    max_timeout = 100
+    for i in range(1, max_timeout):
+        try:
+            pod = api_core.read_namespaced_pod(name=pod_name, namespace=namespace)
+            print(f"Waiting for pod {pod_name} to be deleted... (currently at the phase {pod.status.phase})")
+            time.sleep(1)
+        except kubernetes.client.exceptions.ApiException as e:
+            if e.status == 404:
+                print(f"Pod {pod_name} has been deleted successfully.")
+                return
+            else:
+                raise e
+    raise RuntimeError(f"couldn't remove pod {pod_name} within {max_timeout} seconds")
 
 
 def find_pod(kube_conn, namespace: str, pod_name: str):
@@ -223,6 +253,7 @@ def send_tar_to_pod(kube_conn: client.CoreV1Api,
         else:
             break
     resp.close()
+    print("done!")
 
 
 def remove_files_from_pod(
@@ -333,6 +364,8 @@ def main():
 
     dockerfile = config.dockerfile
     project_root = dockerfile.parent
+    if config.restart:
+        delete_pod(api_core, config.namespace, config.pod_name)
 
     print(f"Trying to find your pod {config.pod_name} with a command like...")
     print(f"$ kubectl"
@@ -348,7 +381,6 @@ def main():
         print("Perform initial synchronize with the pod (you can disable it with the '--skip_first_sync' flag)")
         transfer_files = convert_absolute_path_to_src_dest(project_root, config.src_dest, directories_to_watch)
         send_tar_to_pod(api_core, config.namespace, config.pod_name, create_transport_tar(transfer_files))
-        print("done!")
     else:
         print("Skip the first synchronize with the pod")
 
