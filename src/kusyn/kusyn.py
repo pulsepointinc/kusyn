@@ -180,10 +180,18 @@ def wait_for_pod_is_running(api_core, namespace, pod_name):
 
 def find_or_create_pod(api_client, api_core, config: KusynConfig, pod_k8s_configuration_yaml: pathlib.Path):
     pod = find_pod(api_core, config.namespace, config.pod_name)
+    create_new_pod = False
     if pod:
-        print(f"found your pod {config.pod_name} in {config.namespace}")
+        print(f"found your pod {config.pod_name} in {config.namespace} in phase {pod.status.phase}")
+        if pod.status.phase in ('Succeeded', 'Failed', 'Unknown'):
+            print(f"your pod in phase {pod.status.phase}, deleting it...")
+            delete_pod(api_core, config.namespace, config.pod_name)
+            create_new_pod = True
     else:
-        print(f"didn't foun your pod {config.pod_name} in {config.namespace}, creating it...")
+        print(f"\ndidn't foun your pod {config.pod_name} in {config.namespace}, it will be created...")
+        create_new_pod = True
+
+    if create_new_pod:
         with open(pod_k8s_configuration_yaml) as template:
             env_vars = os.environ.copy()
             env_vars["POD_NAME"] = config.pod_name
