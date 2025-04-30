@@ -167,7 +167,7 @@ def find_pod(kube_conn, namespace: str, pod_name: str):
 def wait_for_pod_is_running(api_core, namespace, pod_name):
     # waiting for the pod has been created
     w = watch.Watch()
-    for event in w.stream(api_core.list_namespaced_pod, namespace=namespace, watch=True):
+    for event in w.stream(api_core.list_namespaced_pod, namespace=namespace, timeout_seconds=60*15, watch=True):
         pod = event["object"]
         pod_status = pod.status.phase
 
