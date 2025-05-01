@@ -3,6 +3,7 @@ import io
 import os
 import pathlib
 import queue
+import re
 import sys
 import tarfile
 import time
@@ -11,6 +12,7 @@ from typing import Callable, Dict
 import kubernetes
 import watchdog
 import yaml
+from dockerfile_parse import DockerfileParser
 from kubernetes import client, utils, stream, watch
 from pyhocon import ConfigFactory
 from watchdog.events import FileSystemEventHandler
@@ -167,7 +169,7 @@ def find_pod(kube_conn, namespace: str, pod_name: str):
 def wait_for_pod_is_running(api_core, namespace, pod_name):
     # waiting for the pod has been created
     w = watch.Watch()
-    for event in w.stream(api_core.list_namespaced_pod, namespace=namespace, timeout_seconds=60*15, watch=True):
+    for event in w.stream(api_core.list_namespaced_pod, namespace=namespace, timeout_seconds=60 * 15, watch=True):
         pod = event["object"]
         pod_status = pod.status.phase
 
@@ -203,19 +205,40 @@ def find_or_create_pod(api_client, api_core, config: KusynConfig, pod_k8s_config
             wait_for_pod_is_running(api_core, config.namespace, config.pod_name)
 
 
+def resolve_args(args):
+    result = {}
+    pattern = r'\${(.*?)}'
+    for key, value in args.items():
+        # Regular expression to find ${key}
+
+        matches = re.findall(pattern, value)
+
+        result_value = value
+        for match in matches:
+            if match in result:
+                result_value = value.replace(f"${{{match}}}", result[match])
+
+        result[key] = result_value
+    return result
+
+
+def resolve_value_with_args(value, args):
+    pattern = r'\${(.*?)}'
+    return re.sub(pattern, lambda m: args[m.group(1)], value)
+
+
 def find_all_sources(dockerfile: pathlib.Path) -> dict[str, str]:
-    """
-    create a source to destination map off a Dockerfile
-    :param dockerfile: Dockerfile of the project
-    :return: dict with {source: destination} as it specified in the Dockerfile
-    """
+    dfp = DockerfileParser()
     with dockerfile.open("r") as file:
-        copys = [line for line in file.read().splitlines() if line.startswith("COPY")]
+        dfp.content = file.read()
+        docker_args = resolve_args(dfp.args)
+        copys = [i for i in dfp.structure if i['instruction'] == 'COPY']
         src_dest = {}
         for line in copys:
-            copy_args = line.split(" ")
+            copy_args = line['value'].split(" ")
+            copy_args = [resolve_value_with_args(v, docker_args) for v in copy_args]
             dest = copy_args[-1]
-            for src in copy_args[1:-1]:
+            for src in copy_args[0:-1]:
                 if src != "":
                     src_dest[src] = dest
         return src_dest

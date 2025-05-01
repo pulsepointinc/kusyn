@@ -10,7 +10,8 @@ license = {text = "proprietary"}
 dependencies=[
     "kubernetes",
     "watchdog",
-    "pyhocon"
+    "pyhocon",
+    "dockerfile-parse",
 ]
 
 [project.scripts]
